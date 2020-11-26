@@ -1,0 +1,224 @@
+library(rstan)
+library(shinystan)
+library(bayesplot)
+library(xtable)
+library(DHARMa)
+library(loo)
+
+# Data fit to the models
+
+# number of years
+N=48
+
+# number of simulated years
+M=0
+
+# catch data
+C=c(15.9, 25.7, 28.5, 23.7, 24.9, 33.2, 28.2, 19.7, 17.6, 19.4, 21.5, 23.1,
+                 22.6, 22.9, 24.0, 29.7, 14.9, 14.6, 31.1, 37.3, 40.6, 30.2, 27.2, 28.7, 
+                 26.0, 36.6, 32.8, 35.3, 27.6, 28.4, 28.0, 30.6, 27.7, 31.4, 38.8, 31.7, 
+                 28.0, 22.5, 18.9, 24.5, 20.3, 18.9, 22.3, 19.2, 24.1, 25.1, 19.3, 13.7)
+
+# CPUE data
+I=c(801.35, 791.72, 743.27, 599.7, 629.15, 415.4, 319.23, 343.32, 405.04, 374.69, 449.76, 
+                 384.15, 352.29, 361.37, 321.2, 301.33, 294.83, 368.2, 300.71, 295.3, 263.46, 195.45,
+                 165.61,177.62, 197.55, 214.57, 218.2, 282.08, 276.07, 292.35, 308.64, 281.76, 197.97, 
+                 174.6, 218.39, 175.16, 153.28, 202.27, 253.89, 202.06, 239.13, 248.35, 262.41, 286.47, 
+                 240.72, 250.93, 270.34,180.64)*0.1 
+
+# fit models
+schaefer_stanfit_default <- stan(file = "model.stan",data=c("N","M","C","I"))
+schaefer_stanfit <- stan(file = "model.stan",data=c("N","M","C","I"), iter = 40000, thin =10,control=list(adapt_delta=0.99,max_treedepth = 15))
+fox_stanfit <- stan(file = "fox_model.stan",data=c("N","M","C","I"), iter = 40000, thin =10,control=list(adapt_delta=0.99,max_treedepth = 15))
+schaefer_stanfit_p1 <- stan(file = "model_p1_0.9.stan",data=c("N","M","C","I"), iter = 40000, thin =10,control=list(adapt_delta=0.99,max_treedepth = 15))
+fox_stanfit_p1 <- stan(file = "fox_model_p1_0.9.stan",data=c("N","M","C","I"), iter = 40000, thin =10,control=list(adapt_delta=0.99,max_treedepth = 15))
+
+### Summaries ###
+color_scheme_set("mix-brightblue-gray")
+
+# pairs
+mcmc_pairs(schaefer_stanfit_default, pars = c("K","r","q","sigma2","tau2"),off_diag_args = list(size = 0.75),np=nuts_params(schaefer_stanfit_default))
+mcmc_pairs(schaefer_stanfit, pars = c("K","r","q","sigma2","tau2"),off_diag_args = list(size = 0.75),np=nuts_params(schaefer_stanfit))
+mcmc_pairs(fox_stanfit, pars = c("K","r","q","sigma2","tau2"),off_diag_args = list(size = 0.75),np=nuts_params(fox_stanfit))
+mcmc_pairs(schaefer_stanfit_p1, pars = c("K","r","q","sigma2","tau2"),off_diag_args = list(size = 0.75))
+mcmc_pairs(fox_stanfit_p1 , pars = c("K","r","q","sigma2","tau2"),off_diag_args = list(size = 0.75))
+
+# traces
+mcmc_trace(schaefer_stanfit_default, pars = "tau2", np=nuts_params(schaefer_stanfit_default)) 
+mcmc_trace(schaefer_stanfit, pars = "tau2", np=nuts_params(schaefer_stanfit)) 
+mcmc_combo(schaefer_stanfit, pars = c("K","r","q","sigma2","tau2"), np=nuts_params(schaefer_stanfit))
+mcmc_combo(fox_stanfit, pars = c("K","r","q","sigma2","tau2"), np=nuts_params(fox_stanfit))
+mcmc_combo(schaefer_stanfit_p1, pars = c("K","r","q","sigma2","tau2"), np=nuts_params(schaefer_stanfit_p1)) 
+mcmc_combo(fox_stanfit_p1, pars = c("K","r","q","sigma2","tau2"), np=nuts_params(fox_stanfit_p1)) 
+
+# rhats
+mcmc_rhat(rhat(schaefer_stanfit_default,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_rhat(rhat(schaefer_stanfit,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_rhat(rhat(fox_stanfit,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_rhat(rhat(schaefer_stanfit_p1,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_rhat(rhat(fox_stanfit_p1,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+
+# neff
+mcmc_neff(neff_ratio(schaefer_stanfit_default,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_neff(neff_ratio(schaefer_stanfit,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_neff(neff_ratio(fox_stanfit,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_neff(neff_ratio(schaefer_stanfit_p1,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+mcmc_neff(neff_ratio(fox_stanfit_p1,pars = c("K","r","q","sigma2","tau2"))) + yaxis_text(hjust=1)
+
+# acf
+mcmc_acf_bar(schaefer_stanfit_default, pars = c("K","r","q","sigma2","tau2"))
+mcmc_acf_bar(schaefer_stanfit, pars = c("K","r","q","sigma2","tau2"))
+mcmc_acf_bar(fox_stanfit, pars = c("K","r","q","sigma2","tau2"))
+mcmc_acf_bar(schaefer_stanfit_p1, pars = c("K","r","q","sigma2","tau2"))
+mcmc_acf_bar(fox_stanfit_p1, pars = c("K","r","q","sigma2","tau2"))
+
+### Posterior predictive simulations ###
+color_scheme_set("brightblue")
+
+# schaefer 
+schaefer_sim = extract(schaefer_stanfit)
+n_sims = length(schaefer_sim$lp__)
+y_rep_s = array(NA,c(n_sims,N))
+for (s in 1:n_sims)
+  y_rep_s[s,] = rlnorm(N,log(schaefer_sim$q[s]*schaefer_sim$B[s,]),sqrt(schaefer_sim$tau2[s]))
+
+# fox 
+fox_sim = extract(fox_stanfit)
+y_rep_f = array(NA,c(n_sims,N))
+for (s in 1:n_sims)
+  y_rep_f[s,] = rlnorm(N,log(fox_sim$q[s]*fox_sim$B[s,]),sqrt(fox_sim$tau2[s]))
+
+# schaefer B[1]~0.9*K
+schaefer_sim_p1 = extract(schaefer_stanfit_p1)
+y_rep_s_p1 = array(NA,c(n_sims,N))
+for (s in 1:n_sims)
+  y_rep_s_p1[s,] = rlnorm(N,log(schaefer_sim_p1$q[s]*schaefer_sim_p1$B[s,]),sqrt(schaefer_sim_p1$tau2[s]))
+
+# fox B[1]~0.9*K
+fox_sim_p1 = extract(fox_stanfit_p1)
+y_rep_f_p1 = array(NA,c(n_sims,N))
+for (s in 1:n_sims)
+  y_rep_f_p1[s,] = rlnorm(N,log(fox_sim_p1$q[s]*fox_sim_p1$B[s,]),sqrt(fox_sim_p1$tau2[s]))
+
+# compare density
+ppc_dens_overlay(I, y_rep_s[1:50, ]) +xlim(c(0,150))
+ppc_dens_overlay(I, y_rep_f[1:50, ]) +xlim(c(0,150))
+ppc_dens_overlay(I, y_rep_s_p1[1:50, ]) +xlim(c(0,150))
+ppc_dens_overlay(I, y_rep_f_p1[1:50, ]) +xlim(c(0,150))
+
+par(mfrow=c(2,2))
+# compare error
+ppc_error_scatter_avg_vs_x(I, y_rep_s,x=1:48) +ylim(c(-4,4)) +labs(x="Time",title="Schaefer")
+ppc_error_scatter_avg_vs_x(I, y_rep_f,x=1:48) + ylim(c(-4,4)) +labs(x="Time",title="Fox")
+ppc_error_scatter_avg_vs_x(I, y_rep_s_p1,x=1:48) + ylim(c(-4,4)) +labs(x="Time",title="Schaefer B[1]~0.9*K")
+ppc_error_scatter_avg_vs_x(I, y_rep_f_p1,x=1:48) + ylim(c(-4,4)) +labs(x="Time",title="Fox B[1]~0.9*K")
+
+### Posterior predictive residuals using DHARMa ###
+
+# Schaefer 
+DHARMaRes_s = createDHARMa(simulatedResponse = t(y_rep_s), observedResponse = I)
+plot(DHARMaRes_s, quantreg = F)
+testTemporalAutocorrelation(DHARMaRes_s)
+
+# Fox
+DHARMaRes_f = createDHARMa(simulatedResponse = t(y_rep_f), observedResponse = I)
+plot(DHARMaRes_f , quantreg = F)
+testTemporalAutocorrelation(DHARMaRes_f, time=1:48)
+
+# Schaefer p1
+DHARMaRes_s_p1 = createDHARMa(simulatedResponse = t(y_rep_s_p1), observedResponse = I)
+plot(DHARMaRes_s_p1, quantreg = F)
+testTemporalAutocorrelation(DHARMaRes_s_p1, time=1:48)
+
+# Fox p1
+DHARMaRes_f_p1 = createDHARMa(simulatedResponse = t(y_rep_f_p1), observedResponse = I)
+plot(DHARMaRes_f_p1 , quantreg = F)
+testTemporalAutocorrelation(DHARMaRes_f_p1, time=1:48)
+
+### loo ###
+par(mfrow=c(2,2))
+
+# schaefer loo
+loo_schaefer <- loo(schaefer_stanfit, save_psis = TRUE)
+p = print(loo_schaefer)
+
+# fox loo
+loo_fox <- loo(fox_stanfit, save_psis = TRUE)
+p = print(loo_fox)
+
+# schaefer p1=0.9 loo
+loo_schaefer_p1 <- loo(schaefer_stanfit_p1, save_psis = TRUE)
+p = print(loo_schaefer_p1)
+
+# fox p1=0.9 loo
+loo_fox_p1 <- loo(fox_stanfit_p1, save_psis = TRUE)
+p = print(loo_fox_p1)
+
+# use loo to compare the 4 models
+s = loo_compare(loo_schaefer,loo_fox,loo_schaefer_p1,loo_fox_p1)
+p = print(s,simplify = F)
+xtable(as.data.frame(p),type="latex")
+
+# plot all the graphs
+plot_ks <- function(ks, ids, thres = 0.7) {
+  dat_ks <- data.frame(ks = ks, ids = ids)
+  ggplot(dat_ks, aes(x = ids, y = ks)) + 
+    geom_point(aes(color = ks > thres), shape = 3, show.legend = FALSE) + 
+    geom_hline(yintercept = thres, linetype = 2, color = "red2") + 
+    geom_hline(yintercept = 1, linetype = 1, color = "red2") + 
+    scale_color_manual(values = c("cornflowerblue", "darkblue")) + 
+    labs(x = "Data point", y = "Pareto k") + 
+    ylim(-0, 1.2)
+}
+
+s = plot_ks(pareto_k_values(loo_schaefer), 1:48) +theme_classic()
+f = plot_ks(pareto_k_values(loo_fox), 1:48) +theme_classic()
+s2 = plot_ks(pareto_k_values(loo_schaefer_p1), 1:48) +theme_classic()
+f2 = plot_ks(pareto_k_values(loo_fox_p1), 1:48) +theme_classic()
+
+ggarrange(s,f,s2,f2, labels=c("Schaefer model (B[1]~K)","Fox model (B[1]~K)",
+                              "Schaefer model (B[1]~0.9*K)","Fox model (B[1]~0.9*K)"),ncol = 2, nrow = 2)
+
+### use moment matching for loo ###
+
+# schaefer loo
+loo_schaefer_mm <- loo(schaefer_stanfit, moment_match = TRUE,save_psis = TRUE)
+p = print(loo_schaefer_mm)
+
+# fox loo
+loo_fox_mm <- loo(fox_stanfit, moment_match = TRUE)
+p = print(loo_fox_mm)
+
+# schaefer p1=0.9 loo
+loo_schaefer_p1_mm <- loo(schaefer_stanfit_p1, moment_match = TRUE)
+p = print(loo_schaefer_p1_mm)
+
+# fox p1=0.9 loo
+loo_fox_p1_mm <- loo(fox_stanfit_p1, moment_match = TRUE)
+p = print(loo_fox_p1_mm)
+
+# use loo to compare the 4 models
+s_mm = loo_compare(loo_schaefer_mm,loo_fox_mm,loo_schaefer_p1_mm,loo_fox_p1_mm)
+p_mm = print(s_mm,simplify = F)
+xtable(as.data.frame(p_mm),type="latex")
+
+s_mm = plot_ks(pareto_k_values(loo_schaefer_mm), 1:48) +theme_classic()
+f_mm = plot_ks(pareto_k_values(loo_fox_mm), 1:48) +theme_classic()
+s2_mm = plot_ks(pareto_k_values(loo_schaefer_p1_mm), 1:48) +theme_classic()
+f2_mm = plot_ks(pareto_k_values(loo_fox_p1_mm), 1:48) +theme_classic()
+
+ggarrange(s_mm,f_mm,s2_mm,f2_mm, labels=c("Schaefer model (B[1]~K)","Fox model (B[1]~K)",
+                              "Schaefer model (B[1]~0.9*K)","Fox model (B[1]~0.9*K)"),ncol = 2, nrow = 2)
+
+
+### Posterior predictive plot ###
+ppc_loo_intervals(I, y_rep_s, psis_object = loo_schaefer_mm$psis_object)
+ppc_loo_intervals(I, y_rep_f, psis_object = loo_fox_mm$psis_object)
+ppc_loo_intervals(I, y_rep_s_p1, psis_object = loo_schaefer_p1_mm$psis_object)
+ppc_loo_intervals(I, y_rep_f_p1, psis_object = loo_fox_p1_mm$psis_object)
+
+ppc_stat(I, y_rep_f, stat = "mean")
+ppc_stat(I, y_rep_f, stat = "median")
+ppc_stat(I, y_rep_f, stat = "min")
+ppc_stat(I, y_rep_f, stat = "max")
+
